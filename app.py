@@ -1,22 +1,21 @@
 import os
-# Detect if running on Streamlit Cloud
+from pathlib import Path
+import json
+import fitz  # PyMuPDF
+import pandas as pd
+import streamlit as st
+import matplotlib.pyplot as plt
+import speech_recognition as sr
+from openai import OpenAI
+
+# Detect environment
 if "STREAMLIT_SHARED_SECRET" in os.environ:
     os.environ["STREAMLIT_ENV"] = "cloud"
 else:
     os.environ["STREAMLIT_ENV"] = "local"
 
-import streamlit as st
-import openai
-import json
-import speech_recognition as sr
-import fitz  # PyMuPDF
-from pathlib import Path
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# ----------- CONFIG ---------- #
-openai.api_key = st.secrets["openai_api_key"]
-
+# Initialize OpenAI Client
+client = OpenAI(api_key=st.secrets["openai_api_key"])
 
 # ----------- PDF UTILS ------------ #
 def extract_text_from_pdf(pdf_path):
@@ -46,7 +45,7 @@ def extract_structured_fields(text):
     {text}
     """
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
@@ -107,7 +106,7 @@ def ask_agentic_ai(prompt, bill):
         {"role": "user", "content": prompt}
     ]
 
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=messages,
         max_tokens=250
@@ -153,7 +152,7 @@ if bill_data_collection:
         st.text(bill_data['raw_text'])
 
     if st.button("💳 Confirm Payment"):
-        if bill_data.get("status") == "unpaid":
+        if bill_data.get("status", "").lower() == "unpaid":
             st.success(f"✅ Payment of ${bill_data.get('amount_due')} to {bill_data.get('biller_name')} confirmed!")
             speak(f"Payment of ${bill_data.get('amount_due')} to {bill_data.get('biller_name')} confirmed!")
         else:
@@ -176,10 +175,7 @@ if bill_data_collection:
         if os.environ.get("STREAMLIT_ENV") != "cloud":
             use_voice = st.button("🎤 Use Voice Input")
 
-    if use_voice:
-        query = listen_to_voice()
-    else:
-        query = text_input
+    query = listen_to_voice() if use_voice else text_input
 
     if query:
         with st.spinner("Processing your request with AI..."):
