@@ -1,20 +1,19 @@
 import os
-# Detect if running on Streamlit Cloud
-if "STREAMLIT_SHARED_SECRET" in os.environ:
-    os.environ["STREAMLIT_ENV"] = "cloud"
-else:
-    os.environ["STREAMLIT_ENV"] = "local"
-
 import streamlit as st
 import openai
 import json
 import speech_recognition as sr
 import fitz  # PyMuPDF
 from pathlib import Path
-import matplotlib.pyplot as plt
 import pandas as pd
 
-# ----------- CONFIG ---------- #
+# ----------- SET ENV ---------- #
+if "STREAMLIT_SHARED_SECRET" in os.environ:
+    os.environ["STREAMLIT_ENV"] = "cloud"
+else:
+    os.environ["STREAMLIT_ENV"] = "local"
+
+# ----------- SET API KEY ---------- #
 openai.api_key = st.secrets["openai_api_key"]
 
 # ----------- PDF UTILS ------------ #
@@ -53,10 +52,8 @@ def extract_structured_fields(text):
         )
         json_text = response.choices[0].message.content
         parsed_data = json.loads(json_text)
-
         for key in ["biller_name", "account_number", "due_date", "amount_due", "billing_period", "service_description", "status"]:
             parsed_data.setdefault(key, None)
-
         parsed_data['raw_text'] = text
         return parsed_data
     except Exception as e:
@@ -105,7 +102,6 @@ def ask_agentic_ai(prompt, bill):
         {"role": "system", "content": f"You are a helpful billing assistant. This is the structured data from the user's bill:\n{context_json}"},
         {"role": "user", "content": prompt}
     ]
-
     response = openai.chat.completions.create(
         model="gpt-4",
         messages=messages,
