@@ -1,25 +1,27 @@
 import os
-import json
-import fitz  # PyMuPDF
-import streamlit as st
-import openai
-import speech_recognition as sr
-import pandas as pd
-
-# Detect cloud vs local
+# Detect if running on Streamlit Cloud
 if "STREAMLIT_SHARED_SECRET" in os.environ:
     os.environ["STREAMLIT_ENV"] = "cloud"
 else:
     os.environ["STREAMLIT_ENV"] = "local"
 
-# Initialize OpenAI Key
+import streamlit as st
+import openai
+import json
+import speech_recognition as sr
+import fitz  # PyMuPDF
+from pathlib import Path
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# ----------- CONFIG ---------- #
 openai.api_key = st.secrets["openai_api_key"]
 
 # ----------- PDF UTILS ------------ #
 def extract_text_from_pdf(pdf_path):
+    text = ""
     try:
         doc = fitz.open(pdf_path)
-        text = ""
         for page in doc:
             text += page.get_text()
         return text.strip()
@@ -42,7 +44,6 @@ def extract_structured_fields(text):
     Invoice:
     {text}
     """
-
     try:
         response = openai.chat.completions.create(
             model="gpt-4",
@@ -52,9 +53,11 @@ def extract_structured_fields(text):
         )
         json_text = response.choices[0].message.content
         parsed_data = json.loads(json_text)
+
         for key in ["biller_name", "account_number", "due_date", "amount_due", "billing_period", "service_description", "status"]:
             parsed_data.setdefault(key, None)
-        parsed_data["raw_text"] = text
+
+        parsed_data['raw_text'] = text
         return parsed_data
     except Exception as e:
         return {"raw_text": text, "error": str(e)}
@@ -75,6 +78,7 @@ def listen_to_voice():
     if os.environ.get("STREAMLIT_ENV") == "cloud":
         st.warning("🎤 Voice input is not supported on Streamlit Cloud.")
         return ""
+
     try:
         import pyaudio
     except ImportError:
@@ -93,14 +97,15 @@ def listen_to_voice():
             st.warning("Sorry, I didn't catch that.")
             return ""
 
-# ----------- AI Q&A ------------ #
+# ----------- LLM ------------- #
 def ask_agentic_ai(prompt, bill):
-    context_fields = {k: v for k, v in bill.items() if k != "raw_text"}
+    context_fields = {k: v for k, v in bill.items() if k != 'raw_text'}
     context_json = json.dumps(context_fields, indent=2)
     messages = [
         {"role": "system", "content": f"You are a helpful billing assistant. This is the structured data from the user's bill:\n{context_json}"},
         {"role": "user", "content": prompt}
     ]
+
     response = openai.chat.completions.create(
         model="gpt-4",
         messages=messages,
@@ -108,7 +113,7 @@ def ask_agentic_ai(prompt, bill):
     )
     return response.choices[0].message.content
 
-# ----------- Action Commands ------------ #
+# ----------- ACTIONS --------- #
 def handle_action(command, bill):
     if "pay" in command.lower():
         return f"Initiating secure payment of ${bill.get('amount_due', 'unknown')} to {bill.get('biller_name', 'your biller')}."
@@ -118,7 +123,7 @@ def handle_action(command, bill):
         return "A complaint has been raised with your service provider."
     return None
 
-# ----------- Streamlit UI ------------ #
+# ----------- UI Starts Here ----------- #
 st.set_page_config(page_title="Agentic AI Bill Assistant", page_icon="🤖")
 st.title("🤖 Agentic AI Billing Assistant")
 st.markdown("Talk to your bill — ask questions, get clarity, and resolve actions.")
@@ -128,10 +133,9 @@ bill_data_collection = []
 
 if uploaded_files:
     for uploaded_file in uploaded_files:
-        file_path = f"temp_{uploaded_file.name}"
-        with open(file_path, "wb") as f:
+        with open(f"temp_{uploaded_file.name}", "wb") as f:
             f.write(uploaded_file.getbuffer())
-        text = extract_text_from_pdf(file_path)
+        text = extract_text_from_pdf(f"temp_{uploaded_file.name}")
         bill_data = extract_structured_fields(text)
         bill_data_collection.append(bill_data)
 
@@ -141,27 +145,25 @@ if len(bill_data_collection) > 1:
 
 if bill_data_collection:
     bill_data = bill_data_collection[selected_bill_index]
-    
     with st.expander("📑 Extracted Invoice Details"):
-        st.json({k: v for k, v in bill_data.items() if k != "raw_text"})
+        st.json({k: v for k, v in bill_data.items() if k != 'raw_text'})
 
     with st.expander("🔍 View Raw Invoice Text"):
-        st.text(bill_data["raw_text"])
+        st.text(bill_data['raw_text'])
 
     if st.button("💳 Confirm Payment"):
         if bill_data.get("status") == "unpaid":
-            msg = f"✅ Payment of ${bill_data.get('amount_due')} to {bill_data.get('biller_name')} confirmed!"
-            st.success(msg)
-            speak(msg)
+            st.success(f"✅ Payment of ${bill_data.get('amount_due')} to {bill_data.get('biller_name')} confirmed!")
+            speak(f"Payment of ${bill_data.get('amount_due')} to {bill_data.get('biller_name')} confirmed!")
         else:
             st.info("This bill is already marked as paid.")
 
     if len(bill_data_collection) > 1:
-        df = pd.DataFrame([{**b, "amount_due": float(b.get("amount_due", 0) or 0)} for b in bill_data_collection])
-        if "biller_name" in df.columns and "billing_period" in df.columns:
-            df["label"] = df["biller_name"].fillna("Bill") + " - " + df["billing_period"].fillna("N/A")
+        df = pd.DataFrame([{**b, 'amount_due': float(b.get('amount_due', 0) or 0)} for b in bill_data_collection])
+        if 'biller_name' in df.columns and 'billing_period' in df.columns:
+            df['label'] = df['biller_name'].fillna('Bill') + ' - ' + df['billing_period'].fillna('N/A')
             st.subheader("📊 Bill Amount Comparison")
-            st.bar_chart(df.set_index("label")["amount_due"])
+            st.bar_chart(df.set_index('label')['amount_due'])
         else:
             st.warning("Some invoice data is incomplete — skipping chart display.")
 
