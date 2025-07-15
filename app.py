@@ -15,7 +15,10 @@ else:
 
 # ----------- SET API KEY ---------- #
 try:
+    # Initialize OpenAI client with API key from secrets
     client = OpenAI(api_key=st.secrets["openai_api_key"])
+    # Test the client with a simple request to verify it works
+    client.models.list()
 except Exception as e:
     st.error(f"Error initializing OpenAI client: {e}")
     st.stop()
