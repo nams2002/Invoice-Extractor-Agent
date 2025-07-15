@@ -162,7 +162,8 @@ if bill_data_collection:
     with col1:
         text_input = st.text_input("💬 Type your question or action")
     with col2:
-        use_voice = st.button("🎤 Use Voice Input")
+        voice_disabled = os.environ.get("STREAMLIT_ENV") == "cloud"
+        use_voice = st.button("🎤 Use Voice Input", disabled=voice_disabled, help="Voice not supported on cloud.")
 
     if use_voice:
         if os.environ.get("STREAMLIT_ENV") == "cloud":
@@ -172,7 +173,6 @@ if bill_data_collection:
             query = listen_to_voice()
     else:
         query = text_input
-
 
     if query:
         with st.spinner("Processing your request with AI..."):
