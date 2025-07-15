@@ -4,5 +4,4 @@ PyMuPDF==1.26.3
 SpeechRecognition==3.10.4
 matplotlib==3.9.2
 pandas==2.2.2
-pyttsx3==2.90
-pyaudio==0.2.11
+rich<14.0.0
