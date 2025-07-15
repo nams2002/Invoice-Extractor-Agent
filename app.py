@@ -1,7 +1,12 @@
+# Detect if running on Streamlit Cloud
+if "STREAMLIT_SHARED_SECRET" in os.environ:
+    os.environ["STREAMLIT_ENV"] = "cloud"
+else:
+    os.environ["STREAMLIT_ENV"] = "local"
+
 import streamlit as st
 import openai
 import json
-import pyttsx3
 import speech_recognition as sr
 import os
 import fitz  # PyMuPDF
@@ -56,9 +61,17 @@ def extract_structured_fields(text):
 
 # ----------- VOICE ------------ #
 def speak(text):
-    engine = pyttsx3.init()
-    engine.say(text)
-    engine.runAndWait()
+    if os.environ.get("STREAMLIT_ENV") == "cloud":
+        pass  # Streamlit Cloud doesn't support TTS
+    else:
+        try:
+            import pyttsx3
+            engine = pyttsx3.init()
+            engine.say(text)
+            engine.runAndWait()
+        except:
+            pass
+
 
 def listen_to_voice():
     recognizer = sr.Recognizer()
