@@ -1,0 +1,9 @@
+# Ignore environment and secrets
+.myenv
+*.env
+*.venv
+secrets.toml
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.DS_Store

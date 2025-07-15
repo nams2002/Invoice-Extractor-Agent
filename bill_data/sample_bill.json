@@ -1,0 +1,10 @@
+{
+  "user": "John Doe",
+  "account_number": "12345678",
+  "due_date": "2025-07-20",
+  "amount_due": 143.75,
+  "last_month_bill": 120.50,
+  "reason": "Increased energy consumption due to heatwave",
+  "status": "unpaid",
+  "company": "EnergyCorp"
+}
