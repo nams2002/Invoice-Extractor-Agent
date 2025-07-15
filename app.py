@@ -165,9 +165,14 @@ if bill_data_collection:
         use_voice = st.button("🎤 Use Voice Input")
 
     if use_voice:
-        query = listen_to_voice()
+        if os.environ.get("STREAMLIT_ENV") == "cloud":
+            st.error("🎤 Voice input is not supported on Streamlit Cloud. Please use text input instead.")
+            query = ""
+        else:
+            query = listen_to_voice()
     else:
         query = text_input
+
 
     if query:
         with st.spinner("Processing your request with AI..."):
