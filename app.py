@@ -1,3 +1,4 @@
+import os
 # Detect if running on Streamlit Cloud
 if "STREAMLIT_SHARED_SECRET" in os.environ:
     os.environ["STREAMLIT_ENV"] = "cloud"
