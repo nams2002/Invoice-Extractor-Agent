@@ -76,6 +76,16 @@ def speak(text):
         pass
 
 def listen_to_voice():
+    if os.environ.get("STREAMLIT_ENV") == "cloud":
+        st.warning("🎤 Voice input is not supported on Streamlit Cloud.")
+        return ""
+
+    try:
+        import pyaudio
+    except ImportError:
+        st.warning("PyAudio is not installed. Please install it locally to use voice input.")
+        return ""
+
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
         st.info("Listening... 🎙️")
@@ -162,15 +172,12 @@ if bill_data_collection:
     with col1:
         text_input = st.text_input("💬 Type your question or action")
     with col2:
-        voice_disabled = os.environ.get("STREAMLIT_ENV") == "cloud"
-        use_voice = st.button("🎤 Use Voice Input", disabled=voice_disabled, help="Voice not supported on cloud.")
+        use_voice = False
+        if os.environ.get("STREAMLIT_ENV") != "cloud":
+            use_voice = st.button("🎤 Use Voice Input")
 
     if use_voice:
-        if os.environ.get("STREAMLIT_ENV") == "cloud":
-            st.error("🎤 Voice input is not supported on Streamlit Cloud. Please use text input instead.")
-            query = ""
-        else:
-            query = listen_to_voice()
+        query = listen_to_voice()
     else:
         query = text_input
 
