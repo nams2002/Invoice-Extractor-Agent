@@ -21,15 +21,16 @@ def initialize_openai_client():
     # Try multiple sources for API key
     try:
         # First try Streamlit secrets
-        api_key = st.secrets.get("openai_api_key")
-    except:
+        if hasattr(st, 'secrets') and 'openai_api_key' in st.secrets:
+            api_key = st.secrets["openai_api_key"]
+    except Exception:
         pass
     
     if not api_key:
         try:
             # Try environment variable
             api_key = os.environ.get("OPENAI_API_KEY")
-        except:
+        except Exception:
             pass
     
     if not api_key:
@@ -43,22 +44,92 @@ def initialize_openai_client():
         api_key = st.text_input("Enter OpenAI API Key:", type="password", help="Your API key will not be stored")
         
         if not api_key:
+            st.warning("Please enter your OpenAI API key to continue.")
             st.stop()
     
     try:
+        # Initialize client with minimal parameters
         client = OpenAI(api_key=api_key)
+        
         # Test the client with a simple request
-        client.models.list()
-        return client
+        try:
+            models = client.models.list()
+            st.success("✅ OpenAI client initialized successfully!")
+            return client
+        except Exception as test_error:
+            st.error(f"❌ API key test failed: {str(test_error)}")
+            st.markdown("Please check that your API key is valid and has the necessary permissions.")
+            st.stop()
+            
     except Exception as e:
         st.error(f"❌ Error initializing OpenAI client: {str(e)}")
-        st.markdown("Please check your API key and try again.")
+        st.markdown("**Troubleshooting tips:**")
+        st.markdown("- Ensure your API key starts with 'sk-'")
+        st.markdown("- Check that your API key is active and has credits")
+        st.markdown("- Try updating the OpenAI library: `pip install openai --upgrade`")
         st.stop()
 
-# Initialize client
-client = initialize_openai_client()
+# Initialize client (with session state to avoid re-initialization)
+if 'openai_client' not in st.session_state:
+    st.session_state.openai_client = initialize_openai_client()
+
+client = st.session_state.openai_client
 
 # ----------- PDF UTILS ------------ #
+def extract_basic_fields(text):
+    """Fallback method to extract basic fields without AI"""
+    import re
+    
+    # Basic patterns to look for
+    patterns = {
+        'amount_due': [
+            r'amount\s*due[:\s]*\$?([0-9,]+\.?[0-9]*)',
+            r'total\s*amount[:\s]*\$?([0-9,]+\.?[0-9]*)',
+            r'balance[:\s]*\$?([0-9,]+\.?[0-9]*)',
+            r'\$([0-9,]+\.?[0-9]*)'
+        ],
+        'due_date': [
+            r'due\s*date[:\s]*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})',
+            r'payment\s*due[:\s]*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})',
+            r'([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})'
+        ],
+        'account_number': [
+            r'account\s*number[:\s]*([0-9-]+)',
+            r'account[:\s]*([0-9-]+)',
+            r'acct[:\s]*([0-9-]+)'
+        ]
+    }
+    
+    result = {
+        "biller_name": None,
+        "account_number": None,
+        "due_date": None,
+        "amount_due": None,
+        "billing_period": None,
+        "service_description": None,
+        "status": "unpaid",
+        "raw_text": text
+    }
+    
+    text_lower = text.lower()
+    
+    # Extract fields using regex
+    for field, pattern_list in patterns.items():
+        for pattern in pattern_list:
+            match = re.search(pattern, text_lower)
+            if match:
+                result[field] = match.group(1).strip()
+                break
+    
+    # Try to extract biller name (usually at the top)
+    lines = text.split('\n')[:5]  # Look in first 5 lines
+    for line in lines:
+        if len(line.strip()) > 5 and not any(char.isdigit() for char in line):
+            result['biller_name'] = line.strip()
+            break
+    
+    return result
+
 def extract_text_from_pdf(pdf_path):
     """Extract text from PDF file"""
     text = ""
@@ -73,6 +144,20 @@ def extract_text_from_pdf(pdf_path):
 
 def extract_structured_fields(text):
     """Extract structured data from invoice text using OpenAI"""
+    if not client:
+        st.error("OpenAI client not available. Please check your API key.")
+        return {
+            "biller_name": None,
+            "account_number": None,
+            "due_date": None,
+            "amount_due": None,
+            "billing_period": None,
+            "service_description": None,
+            "status": None,
+            "raw_text": text,
+            "error": "OpenAI client not initialized"
+        }
+    
     prompt = f"""
     Extract the following fields from the invoice below as JSON:
     - biller_name
@@ -91,7 +176,7 @@ def extract_structured_fields(text):
     """
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",  # Using more stable model
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=500
@@ -114,18 +199,9 @@ def extract_structured_fields(text):
         parsed_data['raw_text'] = text
         return parsed_data
     except Exception as e:
-        st.error(f"Error extracting fields: {str(e)}")
-        return {
-            "biller_name": None,
-            "account_number": None,
-            "due_date": None,
-            "amount_due": None,
-            "billing_period": None,
-            "service_description": None,
-            "status": None,
-            "raw_text": text,
-            "error": str(e)
-        }
+        st.warning(f"AI extraction failed: {str(e)}")
+        # Return basic extracted data manually
+        return extract_basic_fields(text)
 
 # ----------- VOICE ------------ #
 def speak(text):
@@ -173,6 +249,9 @@ def listen_to_voice():
 # ----------- LLM ------------- #
 def ask_agentic_ai(prompt, bill):
     """Ask AI assistant about the bill"""
+    if not client:
+        return "I'm sorry, but the AI assistant is not available right now. Please check the bill details manually."
+    
     try:
         context_fields = {k: v for k, v in bill.items() if k != 'raw_text'}
         context_json = json.dumps(context_fields, indent=2)
@@ -183,7 +262,7 @@ def ask_agentic_ai(prompt, bill):
         ]
         
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",  # Using more stable model
             messages=messages,
             max_tokens=250,
             temperature=0.7
@@ -191,9 +270,37 @@ def ask_agentic_ai(prompt, bill):
         
         return response.choices[0].message.content
     except Exception as e:
-        return f"Sorry, I encountered an error: {str(e)}"
+        # Fallback to basic responses
+        return get_basic_response(prompt, bill)
 
 # ----------- ACTIONS --------- #
+def get_basic_response(prompt, bill):
+    """Fallback responses when AI is not available"""
+    prompt_lower = prompt.lower()
+    
+    if any(word in prompt_lower for word in ["amount", "cost", "price", "due", "owe"]):
+        amount = bill.get('amount_due', 'not found')
+        return f"According to the bill, the amount due is: ${amount}"
+    
+    elif any(word in prompt_lower for word in ["date", "when", "due date"]):
+        due_date = bill.get('due_date', 'not found')
+        return f"The due date for this bill is: {due_date}"
+    
+    elif any(word in prompt_lower for word in ["account", "number"]):
+        account = bill.get('account_number', 'not found')
+        return f"Your account number is: {account}"
+    
+    elif any(word in prompt_lower for word in ["biller", "company", "provider"]):
+        biller = bill.get('biller_name', 'not found')
+        return f"This bill is from: {biller}"
+    
+    elif any(word in prompt_lower for word in ["status", "paid", "unpaid"]):
+        status = bill.get('status', 'not found')
+        return f"The status of this bill is: {status}"
+    
+    else:
+        return "I can help you with information about your bill amount, due date, account number, biller name, or payment status. Please ask a specific question."
+
 def handle_action(command, bill):
     """Handle specific actions based on user commands"""
     command_lower = command.lower()
@@ -229,6 +336,23 @@ def cleanup_temp_files():
 st.set_page_config(page_title="Agentic AI Bill Assistant", page_icon="🤖", layout="wide")
 st.title("🤖 Agentic AI Billing Assistant")
 st.markdown("Talk to your bill — ask questions, get clarity, and resolve actions.")
+
+# Check if we have a working OpenAI client
+if 'openai_client' not in st.session_state:
+    st.info("🔑 Setting up AI assistant...")
+    try:
+        st.session_state.openai_client = initialize_openai_client()
+    except Exception as e:
+        st.error(f"Failed to initialize AI: {str(e)}")
+        st.session_state.openai_client = None
+
+client = st.session_state.openai_client
+
+# Show status
+if client:
+    st.success("✅ AI assistant is ready!")
+else:
+    st.warning("⚠️ AI assistant is not available. Basic functionality will still work.")
 
 # File uploader
 uploaded_files = st.file_uploader(
