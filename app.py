@@ -1,13 +1,7 @@
-import os
-# Detect if running on Streamlit Cloud
-if "STREAMLIT_SHARED_SECRET" in os.environ:
-    os.environ["STREAMLIT_ENV"] = "cloud"
-else:
-    os.environ["STREAMLIT_ENV"] = "local"
-
 import streamlit as st
 import openai
 import json
+import pyttsx3
 import speech_recognition as sr
 import os
 import fitz  # PyMuPDF
@@ -17,7 +11,6 @@ import pandas as pd
 
 # ----------- CONFIG ---------- #
 openai.api_key = st.secrets["openai_api_key"]
-
 
 # ----------- PDF UTILS ------------ #
 def extract_text_from_pdf(pdf_path):
@@ -48,13 +41,18 @@ def extract_structured_fields(text):
     """
     try:
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=500
         )
         json_text = response.choices[0].message.content
         parsed_data = json.loads(json_text)
+
+        # Ensure all expected keys are present
+        for key in ["biller_name", "account_number", "due_date", "amount_due", "billing_period", "service_description", "status"]:
+            parsed_data.setdefault(key, None)
+
         parsed_data['raw_text'] = text
         return parsed_data
     except Exception as e:
@@ -62,17 +60,9 @@ def extract_structured_fields(text):
 
 # ----------- VOICE ------------ #
 def speak(text):
-    if os.environ.get("STREAMLIT_ENV") == "cloud":
-        pass  # Streamlit Cloud doesn't support TTS
-    else:
-        try:
-            import pyttsx3
-            engine = pyttsx3.init()
-            engine.say(text)
-            engine.runAndWait()
-        except:
-            pass
-
+    engine = pyttsx3.init()
+    engine.say(text)
+    engine.runAndWait()
 
 def listen_to_voice():
     recognizer = sr.Recognizer()
@@ -97,7 +87,7 @@ def ask_agentic_ai(prompt, bill):
     ]
 
     response = openai.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini",
         messages=messages,
         max_tokens=250
     )
@@ -141,7 +131,6 @@ if bill_data_collection:
     with st.expander("🔍 View Raw Invoice Text"):
         st.text(bill_data['raw_text'])
 
-    # Simulate Payment Confirmation
     if st.button("💳 Confirm Payment"):
         if bill_data.get("status") == "unpaid":
             st.success(f"✅ Payment of ${bill_data.get('amount_due')} to {bill_data.get('biller_name')} confirmed!")
@@ -149,12 +138,14 @@ if bill_data_collection:
         else:
             st.info("This bill is already marked as paid.")
 
-    # Visualization
     if len(bill_data_collection) > 1:
         df = pd.DataFrame([{**b, 'amount_due': float(b.get('amount_due', 0) or 0)} for b in bill_data_collection])
-        df['label'] = df['biller_name'].fillna('Bill') + ' - ' + df['billing_period'].fillna('N/A')
-        st.subheader("📊 Bill Amount Comparison")
-        st.bar_chart(df.set_index('label')['amount_due'])
+        if 'biller_name' in df.columns and 'billing_period' in df.columns:
+            df['label'] = df['biller_name'].fillna('Bill') + ' - ' + df['billing_period'].fillna('N/A')
+            st.subheader("📊 Bill Amount Comparison")
+            st.bar_chart(df.set_index('label')['amount_due'])
+        else:
+            st.warning("Some invoice data is incomplete — skipping chart display.")
 
     col1, col2 = st.columns(2)
     with col1:
