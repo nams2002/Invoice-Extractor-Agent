@@ -14,7 +14,11 @@ else:
     os.environ["STREAMLIT_ENV"] = "local"
 
 # ----------- SET API KEY ---------- #
-client = OpenAI(api_key=st.secrets["openai_api_key"])
+try:
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
+except Exception as e:
+    st.error(f"Error initializing OpenAI client: {e}")
+    st.stop()
 
 # ----------- PDF UTILS ------------ #
 def extract_text_from_pdf(pdf_path):
