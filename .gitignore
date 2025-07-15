@@ -1,5 +1,5 @@
 # Ignore environment and secrets
-.myenv
+myenv/
 *.env
 *.venv
 secrets.toml
@@ -7,3 +7,4 @@ secrets.toml
 __pycache__/
 *.pyc
 .DS_Store
+temp_*.pdf.pdf
