@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-import openai
+from openai import OpenAI
 import json
 import speech_recognition as sr
 import fitz  # PyMuPDF
@@ -14,7 +14,7 @@ else:
     os.environ["STREAMLIT_ENV"] = "local"
 
 # ----------- SET API KEY ---------- #
-openai.api_key = st.secrets["openai_api_key"]
+client = OpenAI(api_key=st.secrets["openai_api_key"])
 
 # ----------- PDF UTILS ------------ #
 def extract_text_from_pdf(pdf_path):
@@ -44,7 +44,7 @@ def extract_structured_fields(text):
     {text}
     """
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
@@ -102,7 +102,7 @@ def ask_agentic_ai(prompt, bill):
         {"role": "system", "content": f"You are a helpful billing assistant. This is the structured data from the user's bill:\n{context_json}"},
         {"role": "user", "content": prompt}
     ]
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=messages,
         max_tokens=250
