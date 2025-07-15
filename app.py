@@ -1,21 +1,24 @@
 import os
-# Detect if running on Streamlit Cloud
+import streamlit as st
+from openai import OpenAI
+import json
+import speech_recognition as sr
+import fitz  # PyMuPDF
+from pathlib import Path
+import pandas as pd
+
+# ----------- SET ENV ---------- #
 if "STREAMLIT_SHARED_SECRET" in os.environ:
     os.environ["STREAMLIT_ENV"] = "cloud"
 else:
     os.environ["STREAMLIT_ENV"] = "local"
 
-import streamlit as st
-import openai
-import json
-import speech_recognition as sr
-import fitz  # PyMuPDF
-from pathlib import Path
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# ----------- CONFIG ---------- #
-openai.api_key = st.secrets["openai_api_key"]
+# ----------- SET API KEY ---------- #
+try:
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
+except Exception as e:
+    st.error(f"Error initializing OpenAI client: {e}")
+    st.stop()
 
 # ----------- PDF UTILS ------------ #
 def extract_text_from_pdf(pdf_path):
@@ -45,7 +48,7 @@ def extract_structured_fields(text):
     {text}
     """
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
@@ -53,10 +56,8 @@ def extract_structured_fields(text):
         )
         json_text = response.choices[0].message.content
         parsed_data = json.loads(json_text)
-
         for key in ["biller_name", "account_number", "due_date", "amount_due", "billing_period", "service_description", "status"]:
             parsed_data.setdefault(key, None)
-
         parsed_data['raw_text'] = text
         return parsed_data
     except Exception as e:
@@ -105,8 +106,7 @@ def ask_agentic_ai(prompt, bill):
         {"role": "system", "content": f"You are a helpful billing assistant. This is the structured data from the user's bill:\n{context_json}"},
         {"role": "user", "content": prompt}
     ]
-
-    response = openai.chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=messages,
         max_tokens=250
