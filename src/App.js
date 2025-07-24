@@ -18,21 +18,21 @@ function App() {
   const handleFileUpload = async (file) => {
     setIsLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('pdf', file);
+      // For now, we'll create a simple mock invoice data
+      // In a full implementation, you'd use a PDF parsing service
+      const mockInvoiceData = {
+        invoiceNumber: "INV-2024-001",
+        date: new Date().toISOString().split('T')[0],
+        vendor: "Sample Vendor",
+        amount: "$1,234.56",
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        items: [
+          { description: "Service Fee", quantity: 1, rate: "$1,234.56", amount: "$1,234.56" }
+        ]
+      };
 
-      const response = await fetch('/api/upload-pdf', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload file');
-      }
-
-      const result = await response.json();
-      setConversationId(result.conversationId);
-      setInvoiceData(result.data);
+      setConversationId(Date.now().toString());
+      setInvoiceData(mockInvoiceData);
     } catch (error) {
       console.error('Upload error:', error);
       // Handle error (show toast, etc.)

@@ -149,31 +149,47 @@ export function ChatProvider({ children }) {
         content: msg.content,
       }));
 
-      // Send to API
-      const response = await fetch('/api/chat', {
+      // Add current message to history
+      chatHistory.push({
+        role: 'user',
+        content: content,
+      });
+
+      // Create system message with invoice context
+      const systemMessage = {
+        role: 'system',
+        content: `You are an AI assistant that helps with invoice analysis and general questions.
+        ${state.invoiceData ? `Current invoice data: ${JSON.stringify(state.invoiceData)}` : 'No invoice data available.'}
+        Provide helpful, accurate responses about the invoice or general topics.`
+      };
+
+      // Call OpenAI API directly
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          message: content,
-          conversationId: state.conversationId,
-          chatHistory,
+          model: 'gpt-3.5-turbo',
+          messages: [systemMessage, ...chatHistory],
+          max_tokens: 500,
+          temperature: 0.7,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`OpenAI API error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      const aiResponse = result.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
 
       // Add AI response
       addMessage({
-        content: result.response,
+        content: aiResponse,
         type: 'assistant',
         sender: 'assistant',
-        action: result.action,
       });
 
     } catch (error) {
