@@ -1,0 +1,25 @@
+# Exclude Python files from Vercel deployment
+app.py
+requirements.txt
+myenv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Exclude backend directory (Node.js backend will be deployed separately)
+backend/
+
+# Exclude documentation and setup files
+docs/
+*.md
+SETUP.md
+SUBMISSION_README.md
+TROUBLESHOOTING_VOICE_INTERFACE.md
+VOICE_INTERFACE_INTEGRATION.md
+VOICE_INTERFACE_OPTIMIZATIONS.md
+VOICE_INTERFACE_SUMMARY.md
+
+# Exclude temporary files
+temp_*.pdf.pdf
+bill_data/
