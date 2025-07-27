@@ -149,41 +149,52 @@ export function ChatProvider({ children }) {
         content: msg.content,
       }));
 
-      // Add current message to history
-      chatHistory.push({
-        role: 'user',
-        content: content,
-      });
-
-      // Create system message with invoice context
-      const systemMessage = {
-        role: 'system',
-        content: `You are an AI assistant that helps with invoice analysis and general questions.
-        ${state.invoiceData ? `Current invoice data: ${JSON.stringify(state.invoiceData)}` : 'No invoice data available.'}
-        Provide helpful, accurate responses about the invoice or general topics.`
+      // Call backend API instead of OpenAI directly
+      const requestBody = {
+        message: content,
+        conversationId: state.conversationId,
+        chatHistory: chatHistory
       };
 
-      // Call OpenAI API directly
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      console.log('Sending request body:', requestBody);
+      console.log('Stringified body:', JSON.stringify(requestBody));
+
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`,
         },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [systemMessage, ...chatHistory],
-          max_tokens: 500,
-          temperature: 0.7,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
-        throw new Error(`OpenAI API error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Backend API error response:', errorText);
+        throw new Error(`Backend API error! status: ${response.status}, response: ${errorText}`);
       }
 
-      const result = await response.json();
-      const aiResponse = result.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+        console.log('Parsed response:', result);
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError);
+        throw new Error('Invalid JSON response from server');
+      }
+
+      const aiResponse = result.response || 'Sorry, I could not generate a response.';
+
+      // Check if the backend provided invoice data (for demo queries)
+      if (result.invoiceData) {
+        console.log('Setting invoice data from backend:', result.invoiceData);
+        dispatch({ type: actionTypes.SET_INVOICE_DATA, payload: result.invoiceData });
+      }
 
       // Add AI response
       addMessage({

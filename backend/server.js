@@ -63,6 +63,66 @@ const upload = multer({
 // Store for conversation context
 const conversationStore = new Map();
 
+// Demo invoice data for Naman
+const DEMO_INVOICE_DATA = {
+  customer: {
+    name: "Naman Nagi",
+    email: "naman.nagi@email.com",
+    phone: "+1 (555) 123-4567",
+    address: "123 Tech Street, Silicon Valley, CA 94105"
+  },
+  invoice: {
+    invoiceNumber: "INV-2024-001",
+    issueDate: "2024-01-15",
+    dueDate: "2024-02-15",
+    status: "Pending Payment"
+  },
+  billing: {
+    totalAmount: 2850.00,
+    currency: "USD",
+    taxAmount: 285.00,
+    subtotal: 2565.00,
+    taxRate: "10%"
+  },
+  services: [
+    {
+      description: "Premium Cloud Hosting Service",
+      quantity: 1,
+      unitPrice: 1200.00,
+      total: 1200.00,
+      period: "January 2024"
+    },
+    {
+      description: "Advanced Security Package",
+      quantity: 1,
+      unitPrice: 450.00,
+      total: 450.00,
+      period: "January 2024"
+    },
+    {
+      description: "Database Management Service",
+      quantity: 3,
+      unitPrice: 305.00,
+      total: 915.00,
+      period: "January 2024"
+    }
+  ],
+  company: {
+    name: "TechCloud Solutions Inc.",
+    address: "456 Business Ave, San Francisco, CA 94107",
+    phone: "+1 (555) 987-6543",
+    email: "billing@techcloud.com",
+    website: "www.techcloud.com"
+  },
+  paymentDetails: {
+    accountNumber: "****-****-****-1234",
+    routingNumber: "123456789",
+    paymentMethods: ["Credit Card", "Bank Transfer", "PayPal"],
+    lateFee: 50.00,
+    discountAvailable: "2% if paid within 10 days"
+  }
+};
+
 // Enhanced LLM system prompt for generic AI assistant
 const SYSTEM_PROMPT = `You are an advanced AI assistant specializing in billing, payments, and general knowledge queries. You can:
 
@@ -90,11 +150,38 @@ Always provide helpful, accurate, and contextual responses. When discussing fina
 
 If you have access to invoice data, use it to provide specific answers. For general questions, draw from your knowledge base to provide comprehensive responses.`;
 
+// Initialize demo conversation for Naman's invoice
+const DEMO_CONVERSATION_ID = "demo-naman-invoice";
+conversationStore.set(DEMO_CONVERSATION_ID, {
+  invoiceData: DEMO_INVOICE_DATA,
+  messages: [
+    {
+      role: "system",
+      content: SYSTEM_PROMPT
+    },
+    {
+      role: "assistant",
+      content: "I have Naman's invoice loaded. You can ask me questions about the billing details, payment information, or any other aspects of the invoice."
+    }
+  ],
+  createdAt: new Date().toISOString()
+});
+
 // Routes
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Demo data endpoint
+app.get('/api/demo/naman-invoice', (req, res) => {
+  const demoData = conversationStore.get(DEMO_CONVERSATION_ID);
+  res.json({
+    success: true,
+    demoData: demoData ? demoData.invoiceData : null,
+    message: "Demo invoice data for Naman Nagi"
+  });
 });
 
 // Upload and process PDF
@@ -152,10 +239,26 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Get conversation context if available
-    const context = conversationId ? conversationStore.get(conversationId) : null;
+    // Check if user is asking about Naman's invoice (demo data)
+    const isAskingAboutNaman = message.toLowerCase().includes('naman') &&
+                              (message.toLowerCase().includes('invoice') ||
+                               message.toLowerCase().includes('bill') ||
+                               message.toLowerCase().includes('payment'));
+
+    // Get conversation context if available, or use demo data for Naman queries
+    let context = conversationId ? conversationStore.get(conversationId) : null;
+
+    // If asking about Naman and no context, use demo data
+    if (isAskingAboutNaman && !context) {
+      context = conversationStore.get(DEMO_CONVERSATION_ID);
+      console.log('Using demo data for Naman invoice query');
+      console.log('Demo context loaded:', !!context);
+      console.log('Demo invoice data:', !!(context && context.invoiceData));
+    }
+
     console.log('Context found:', !!context);
     console.log('Invoice data available:', !!(context && context.invoiceData));
+    console.log('Using demo data:', isAskingAboutNaman && !conversationId);
     
     // Build context for the AI
     let contextInfo = '';
@@ -191,12 +294,21 @@ app.post('/api/chat', async (req, res) => {
     // Check if this is an action request
     const actionResult = await handleActionRequest(message, context);
 
-    res.json({
+    // Prepare response object
+    const responseObj = {
       success: true,
       response: aiResponse,
       action: actionResult,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    // Include invoice data if available (for demo queries or uploaded invoices)
+    if (context && context.invoiceData) {
+      responseObj.invoiceData = context.invoiceData;
+      console.log('Including invoice data in response:', !!context.invoiceData);
+    }
+
+    res.json(responseObj);
 
   } catch (error) {
     console.error('Chat error:', error);
@@ -311,9 +423,11 @@ async function extractStructuredFields(text) {
 // Helper function to handle action requests
 async function handleActionRequest(message, context) {
   const messageLower = message.toLowerCase();
-  
-  // Payment action
-  if (messageLower.includes('pay') && messageLower.includes('bill')) {
+
+  // Payment action - only trigger for explicit payment requests, not general queries
+  if ((messageLower.includes('pay') || messageLower.includes('make payment')) &&
+      (messageLower.includes('bill') || messageLower.includes('invoice')) &&
+      !messageLower.includes('tell me') && !messageLower.includes('about') && !messageLower.includes('what')) {
     if (context && context.invoiceData) {
       const amount = context.invoiceData.amount_due;
       const biller = context.invoiceData.biller_name;

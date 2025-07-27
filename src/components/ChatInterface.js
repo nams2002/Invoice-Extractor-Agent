@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPaperPlane, FaRobot, FaUpload } from 'react-icons/fa';
+import { FaPaperPlane, FaRobot, FaUpload, FaCreditCard } from 'react-icons/fa';
 import { useChat } from '../context/ChatContext';
 import ChatMessage from './ChatMessage';
 import SuggestedQuestions from './SuggestedQuestions';
@@ -73,6 +73,42 @@ const ChatInterface = ({ conversationId, invoiceData, onFileUpload, isLoading: i
       // Could show a toast: "Please allow microphone access to use voice features"
     } else if (error === 'network') {
       // Could show a toast: "Network error - please check your connection"
+    }
+  };
+
+  const handlePaymentClick = () => {
+    // Simulate redirecting to PaymentUS app
+    const paymentData = {
+      amount: invoiceData?.amount_due || '0.00',
+      biller: invoiceData?.biller_name || 'Unknown Biller',
+      invoiceNumber: invoiceData?.invoice_number || 'N/A',
+      dueDate: invoiceData?.due_date || 'N/A',
+      customerName: invoiceData?.customer_name || 'N/A'
+    };
+
+    // Show confirmation dialog with more details
+    const confirmed = window.confirm(
+      `🏦 PaymentUS - Secure Payment Processing\n\n` +
+      `Customer: ${paymentData.customerName}\n` +
+      `Biller: ${paymentData.biller}\n` +
+      `Invoice #: ${paymentData.invoiceNumber}\n` +
+      `Amount: $${paymentData.amount}\n` +
+      `Due Date: ${paymentData.dueDate}\n\n` +
+      `Continue to PaymentUS app for secure payment?`
+    );
+
+    if (confirmed) {
+      // In a real app, this would redirect to PaymentUS
+      // For demo purposes, we'll show a realistic payment flow
+      setTimeout(() => {
+        alert(
+          `🎉 Payment Processing Initiated!\n\n` +
+          `✓ Redirecting to PaymentUS app...\n` +
+          `✓ Secure payment gateway activated\n` +
+          `✓ Payment amount: $${paymentData.amount}\n\n` +
+          `You will receive a confirmation email once payment is complete.`
+        );
+      }, 500);
     }
   };
 
@@ -198,10 +234,40 @@ const ChatInterface = ({ conversationId, invoiceData, onFileUpload, isLoading: i
 
       {/* Suggested Questions */}
       {messages.length === 0 && (
-        <SuggestedQuestions 
+        <SuggestedQuestions
           onQuestionClick={handleSuggestedQuestion}
           hasInvoice={!!invoiceData}
         />
+      )}
+
+      {/* Payment Button */}
+      {invoiceData && (
+        <motion.div
+          className="px-3 sm:px-4 pb-3"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-lg p-4 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-300">Ready to pay:</span>
+              <span className="text-lg font-bold text-green-400">${invoiceData.amount_due}</span>
+            </div>
+            <div className="text-xs text-gray-400 mb-3">
+              {invoiceData.biller_name} • Invoice #{invoiceData.invoice_number}
+            </div>
+            <Button
+              onClick={handlePaymentClick}
+              className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-2 group"
+            >
+              <FaCreditCard className="h-5 w-5 group-hover:scale-110 transition-transform" />
+              <span>Continue to PaymentUS</span>
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500 text-center">
+            🔒 Secure payment processing • SSL encrypted
+          </p>
+        </motion.div>
       )}
 
       {/* Input Area */}
